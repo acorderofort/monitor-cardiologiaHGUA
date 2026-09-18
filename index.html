@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor Cardiología HGUA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root{--blue:#24577f;--teal:#33858d;--red:#bd4338;--bg:#f3f6f9;--border:#d9e2ea;--text:#263746}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--text)}
+main{max-width:1450px;margin:auto;padding:22px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:18px}
+h1{margin:0;color:var(--blue);font-size:23px}.sub{color:#6c7a86;font-size:13px;margin-top:5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}
+.btnLoad{background:var(--red);color:white}.secondary{background:#e6edf3;color:var(--blue)}.green{background:#287451;color:white}.danger{background:#f8e7e5;color:#a5352c}
+input[type=file]{display:none}
+.card{background:#fff;border:1px solid var(--border);border-radius:11px;box-shadow:0 2px 8px rgba(20,45,65,.05)}
+.notice{padding:11px 14px;margin-bottom:15px;font-size:13px;background:#eef7ff}
+.toolbar{padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+select,input{padding:8px;border:1px solid var(--border);border-radius:6px;background:white}
+#search{min-width:260px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:15px}
+.kpi{padding:16px}.value{font-size:29px;font-weight:800;color:var(--blue)}.label{font-size:12px;color:#71808c}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px}.chart{height:300px;padding:12px}
+.tableWrap{overflow:auto} table{border-collapse:collapse;width:100%;min-width:950px}
+th,td{padding:9px 10px;border-bottom:1px solid #edf1f4;text-align:left;font-size:13px}
+th{background:var(--blue);color:#fff}tbody tr:nth-child(even){background:#f9fbfc}
+.modal{position:fixed;inset:0;background:rgba(12,25,38,.58);display:none;align-items:flex-start;justify-content:center;padding:25px;overflow:auto;z-index:10}
+.modal.show{display:flex}.box{background:#fff;border-radius:12px;padding:18px;width:min(1400px,98vw)}
+.modalHead{display:flex;justify-content:space-between;gap:15px;align-items:start;margin-bottom:12px}.modalHead h2{margin:0;color:var(--blue)}
+.preview input,.preview select{width:100%;min-width:90px}.preview .diag{min-width:300px}.preview .name{min-width:150px}
+.status{font-size:13px;margin-top:5px;font-weight:700}.ok{color:#24724d}.warn{color:#a5670c}
+.small{font-size:12px;color:#72808d}.footerActions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+@media(max-width:850px){header{flex-direction:column;align-items:flex-start}.kpis,.charts{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div><h1>MONITORIZACIÓN HOSPITALARIA · CARDIOLOGÍA</h1><div class="sub">Hospital General Universitario Dr. Balmis · histórico diario</div></div>
+ <div class="actions">
+  <label class="btn btnLoad" for="pdfInput">+ Cargar PDF del día</label>
+  <input id="pdfInput" type="file" accept=".pdf,application/pdf">
+  <button class="secondary" onclick="exportBackup()">Exportar copia</button>
+  <label class="btn secondary" for="backupInput">Importar copia</label>
+  <input id="backupInput" type="file" accept=".json,application/json">
+ </div>
+</header>
+
+<div class="notice card"><b>Lectura por columnas:</b> esta versión lee directamente las columnas visuales Cama, Nombre, Fecha de ingreso, Diagnóstico y Médico. Los tres médicos/equipos detectados en cada PDF se asignan dinámicamente a P1, P2 y P3.</div>
+
+<div class="toolbar card">
+ <b>Fecha:</b><select id="dateSelect"></select>
+ <input id="search" placeholder="Buscar paciente, cama o diagnóstico…">
+ <span id="daysInfo" class="small"></span>
+ <button class="danger" onclick="deleteDay()">Eliminar día</button>
+</div>
+
+<div class="kpis">
+ <div class="card kpi"><div class="value" id="total">0</div><div class="label">Pacientes hospitalizados</div></div>
+ <div class="card kpi"><div class="value" id="mean">0</div><div class="label">Estancia media</div></div>
+ <div class="card kpi"><div class="value" id="maxStay">0</div><div class="label">Estancia máxima</div></div>
+ <div class="card kpi"><div class="value" id="newToday">0</div><div class="label">Ingresos del día</div></div>
+</div>
+
+<div class="charts">
+ <div class="card chart"><canvas id="chartP"></canvas></div>
+ <div class="card chart"><canvas id="chartDx"></canvas></div>
+</div>
+
+<div class="card tableWrap">
+<table><thead><tr><th>Cama</th><th>Primer apellido</th><th>Responsable</th><th>Diagnóstico</th><th>Fecha ingreso</th><th>Estancia</th></tr></thead>
+<tbody id="body"></tbody></table>
+</div>
+</main>
+
+<div id="modal" class="modal"><div class="box">
+ <div class="modalHead"><div><h2>Revisar PDF antes de guardar</h2><div id="status" class="status"></div></div><button class="secondary" onclick="closeModal()">Cerrar</button></div>
+ <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b>Fecha del listado:</b><input id="importDate" type="date" style="width:auto"><span class="small">Se obtiene de “Fecha impresión”.</span></div>
+ <div class="tableWrap preview">
+  <table><thead><tr><th>Cama</th><th>Paciente</th><th>P1/P2/P3</th><th>Diagnóstico</th><th>Ingreso</th><th></th></tr></thead><tbody id="preview"></tbody></table>
+ </div>
+ <div class="footerActions"><button class="secondary" onclick="addRow()">+ Añadir fila</button><button class="green" onclick="saveImport()">Guardar día y actualizar</button></div>
+</div></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const KEY='monitorCardiologiaHGUA_v5';
+const MAPKEY='monitorCardiologiaHGUA_doctorMap_v5';
+
+let db=JSON.parse(localStorage.getItem(KEY)||'{}');
+let doctorMap=JSON.parse(localStorage.getItem(MAPKEY)||'{}');
+let current='', pending=[], chartP=null, chartDx=null, detectedDoctors=[];
+
+const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isDate=s=>/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}$/.test(String(s).trim());
+const iso=s=>{const m=String(s).match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:''};
+const es=s=>{if(!s)return'';const a=s.split('-');return a.length===3?`${a[2]}/${a[1]}/${a[0]}`:s};
+const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
+const saveMap=()=>localStorage.setItem(MAPKEY,JSON.stringify(doctorMap));
+
+function dObj(s){if(!s)return null;const a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])}
+function stay(ing,day){const a=dObj(ing),b=dObj(day);return a&&b?Math.max(0,Math.floor((b-a)/86400000)):0}
+
+function detectPrintDate(text,fileName){
+ const m=(String(fileName)+' '+text).match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+ if(m)return iso(m[1]);
+ const d=new Date();
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function groupWordsIntoLines(words,tol=3.2){
+ const sorted=[...words].sort((a,b)=>a.top-b.top || a.x0-b.x0);
+ const lines=[];
+ for(const w of sorted){
+   let line=lines.find(l=>Math.abs(l.top-w.top)<=tol);
+   if(!line){line={top:w.top,words:[]};lines.push(line)}
+   line.words.push(w);
+   line.top=line.words.reduce((s,x)=>s+x.top,0)/line.words.length;
+ }
+ lines.sort((a,b)=>a.top-b.top);
+ for(const l of lines)l.words.sort((a,b)=>a.x0-b.x0);
+ return lines;
+}
+
+function textInBox(words,x0,x1,y0,y1){
+ const selected=words.filter(w=>{
+   const cx=(w.x0+w.x1)/2, cy=(w.top+w.bottom)/2;
+   return cx>=x0 && cx<x1 && cy>=y0 && cy<y1;
+ });
+ return groupWordsIntoLines(selected).map(l=>l.words.map(w=>w.text).join(' ')).join(' ').replace(/\s+/g,' ').trim();
+}
+
+function firstWordInBox(words,x0,x1,y0,y1,regex=null){
+ const arr=words.filter(w=>{
+   const cx=(w.x0+w.x1)/2,cy=(w.top+w.bottom)/2;
+   return cx>=x0&&cx<x1&&cy>=y0&&cy<y1&&(!regex||regex.test(w.text));
+ }).sort((a,b)=>a.top-b.top||a.x0-b.x0);
+ return arr.length?arr[0].text:'';
+}
+
+function findHeaderY(words){
+ const w=words.find(x=>norm(x.text)==='CAMA');
+ return w ? w.bottom : 181;
+}
+
+function findFooterY(words,pageHeight){
+ const candidates=words.filter(w=>/^Pacientes$/i.test(w.text)||/^Página$/i.test(w.text));
+ if(!candidates.length)return pageHeight-25;
+ return Math.min(...candidates.map(w=>w.top));
+}
+
+/*
+  Parser específico por COLUMNAS VISUALES del informe HGUA.
+  Coordenadas obtenidas a partir de los encabezados impresos:
+  Cama 0-58
+  NHC 58-95
+  Nombre 95-220
+  Edad 220-250
+  Procedencia 250-325
+  Fecha ingreso 325-372
+  Días desde ingreso 372-414
+  Días servicio 414-455
+  Diagnóstico 455-575
+  Médico 575-685
+*/
+function parseHospitalPage(words,pageHeight){
+ const headerY=findHeaderY(words);
+ const footerY=findFooterY(words,pageHeight);
+
+ const beds=words.filter(w=>{
+   const cx=(w.x0+w.x1)/2,cy=(w.top+w.bottom)/2;
+   return cx<58 && cy>headerY && cy<footerY && /^05\d{2,3}[A-Z]?$/.test(norm(w.text));
+ }).sort((a,b)=>a.top-b.top);
+
+ const rows=[];
+ for(let i=0;i<beds.length;i++){
+   const bed=beds[i];
+   const yCenter=(bed.top+bed.bottom)/2;
+
+   // Límites de fila: mitad entre camas consecutivas.
+   const prev=i===0 ? headerY : ((beds[i-1].top+beds[i-1].bottom)/2+yCenter)/2;
+   const next=i===beds.length-1 ? footerY : (yCenter+(beds[i+1].top+beds[i+1].bottom)/2)/2;
+
+   let cama=bed.text;
+   const q=textInBox(words,48,62,prev,next);
+   if(/\(Q\)/i.test(q))cama+=' (Q)';
+
+   const nombre=textInBox(words,95,220,prev,next);
+   const apellido=nombre.split(/\s+/)[0]||'';
+
+   const ingresoText=firstWordInBox(words,325,372,prev,next,/^\d{1,2}\/\d{1,2}\/\d{4}$/);
+   const ingreso=iso(ingresoText);
+
+   const diagnostico=textInBox(words,455,575,prev,next);
+   const medicoNombre=textInBox(words,575,685,prev,next);
+
+   rows.push({
+     cama,
+     apellido,
+     nombreCompleto:nombre,
+     medicoNombre,
+     medico: doctorMap[norm(medicoNombre)] || '',
+     diagnostico,
+     ingreso
+   });
+ }
+ return rows;
+}
+
+async function extractWordsFromPdfPage(page){
+ const tc=await page.getTextContent();
+ const viewport=page.getViewport({scale:1});
+ // Convert PDF.js coordinates to top-based visual coordinates.
+ return tc.items.map(it=>{
+   const x=it.transform[4];
+   const y=it.transform[5];
+   const h=Math.abs(it.height||7);
+   const width=Math.abs(it.width||0);
+   const top=viewport.height-y-h;
+   return {text:String(it.str||'').trim(),x0:x,x1:x+width,top,bottom:top+h};
+ }).filter(w=>w.text);
+}
+
+async function readPDF(file){
+ const buf=await file.arrayBuffer();
+ const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+ let rows=[], text='';
+
+ for(let n=1;n<=pdf.numPages;n++){
+   const page=await pdf.getPage(n);
+   const words=await extractWordsFromPdfPage(page);
+   text+=' '+words.map(w=>w.text).join(' ');
+   rows.push(...parseHospitalPage(words,page.getViewport({scale:1}).height));
+ }
+
+ const seen=new Set();
+ rows=rows.filter(r=>{
+   const k=norm(r.cama);
+   if(seen.has(k))return false;
+   seen.add(k);return true;
+ });
+
+ return {rows,text,date:detectPrintDate(text,file.name)};
+}
+
+function refreshDetectedDoctors(){
+ detectedDoctors=[...new Set(pending.map(r=>r.medicoNombre).filter(Boolean))];
+ // Reapply saved map.
+ pending.forEach(r=>r.medico=doctorMap[norm(r.medicoNombre)]||r.medico||'');
+ renderDoctorMapping();
+}
+
+function renderDoctorMapping(){
+ let box=document.getElementById('doctorMapping');
+ if(!box){
+   box=document.createElement('div');
+   box.id='doctorMapping';
+   box.style.cssText='margin:12px 0;padding:12px;background:#f6f9fb;border:1px solid #d9e2ea;border-radius:8px';
+   const previewWrap=document.querySelector('.preview');
+   previewWrap.parentNode.insertBefore(box,previewWrap);
+ }
+ if(!detectedDoctors.length){box.innerHTML='';return}
+
+ box.innerHTML='<b>Asignación de equipos de este PDF</b><div class="small" style="margin:4px 0 8px">Los nombres se leen de la columna Médico. Asigna cada uno a P1, P2 o P3. La aplicación recordará la elección para próximos días.</div>'+
+ detectedDoctors.map((name,i)=>{
+   const val=doctorMap[norm(name)]||'';
+   return `<div style="display:flex;gap:10px;align-items:center;margin:6px 0">
+     <div style="min-width:300px">${esc(name)}</div>
+     <select onchange="setDoctorTeam('${esc(norm(name))}',this.value)">
+       <option value="">Seleccionar…</option>
+       <option value="P1" ${val==='P1'?'selected':''}>P1</option>
+       <option value="P2" ${val==='P2'?'selected':''}>P2</option>
+       <option value="P3" ${val==='P3'?'selected':''}>P3</option>
+     </select>
+   </div>`;
+ }).join('');
+}
+
+window.setDoctorTeam=function(key,val){
+ if(val)doctorMap[key]=val; else delete doctorMap[key];
+ saveMap();
+ pending.forEach(r=>{if(norm(r.medicoNombre)===key)r.medico=val});
+ renderPreview();
+};
+
+document.getElementById('pdfInput').addEventListener('change',async e=>{
+ const file=e.target.files[0];
+ e.target.value='';
+ if(!file)return;
+ try{
+   const result=await readPDF(file);
+   pending=result.rows;
+   document.getElementById('importDate').value=result.date;
+   refreshDetectedDoctors();
+
+   // If exactly 3 doctors and none has mapping, propose P1/P2/P3 by first appearance.
+   if(detectedDoctors.length===3 && detectedDoctors.every(n=>!doctorMap[norm(n)])){
+     detectedDoctors.forEach((n,i)=>doctorMap[norm(n)]=`P${i+1}`);
+     saveMap();
+     pending.forEach(r=>r.medico=doctorMap[norm(r.medicoNombre)]||'');
+     renderDoctorMapping();
+   }
+
+   const complete=pending.filter(x=>x.diagnostico&&x.medicoNombre).length;
+   const st=document.getElementById('status');
+   st.className='status '+(pending.length&&complete===pending.length?'ok':'warn');
+   st.textContent=pending.length
+     ? `${pending.length} pacientes detectados · ${complete}/${pending.length} con diagnóstico y médico leídos directamente de sus columnas`
+     : 'No se detectaron pacientes.';
+   renderPreview();
+   document.getElementById('modal').classList.add('show');
+ }catch(err){console.error(err);alert('Error al leer el PDF: '+err.message)}
+});
+
+function renderPreview(){
+ document.getElementById('preview').innerHTML=pending.map((r,i)=>`<tr>
+ <td><input value="${esc(r.cama)}" oninput="pending[${i}].cama=this.value"></td>
+ <td><input class="name" title="${esc(r.nombreCompleto)}" value="${esc(r.apellido)}" oninput="pending[${i}].apellido=this.value"></td>
+ <td>
+   <div style="font-size:11px;color:#687782;margin-bottom:3px">${esc(r.medicoNombre)}</div>
+   <select oninput="pending[${i}].medico=this.value">
+    <option value="">—</option>
+    <option value="P1" ${r.medico==='P1'?'selected':''}>P1</option>
+    <option value="P2" ${r.medico==='P2'?'selected':''}>P2</option>
+    <option value="P3" ${r.medico==='P3'?'selected':''}>P3</option>
+   </select>
+ </td>
+ <td><input class="diag" value="${esc(r.diagnostico)}" oninput="pending[${i}].diagnostico=this.value"></td>
+ <td><input type="date" value="${esc(r.ingreso)}" oninput="pending[${i}].ingreso=this.value"></td>
+ <td><button class="danger" onclick="pending.splice(${i},1);refreshDetectedDoctors();renderPreview()">×</button></td>
+ </tr>`).join('');
+}
+
+function addRow(){
+ pending.push({cama:'',apellido:'',nombreCompleto:'',medicoNombre:'',medico:'',diagnostico:'',ingreso:''});
+ renderPreview();
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+
+function validateTeams(){
+ const teams=detectedDoctors.map(n=>doctorMap[norm(n)]).filter(Boolean);
+ if(detectedDoctors.length===3){
+   const unique=new Set(teams);
+   if(teams.length<3 || unique.size<3){
+     alert('Hay 3 médicos/equipos detectados. Debes asignarlos una sola vez a P1, P2 y P3 antes de guardar.');
+     return false;
+   }
+ }
+ return true;
+}
+
+function saveImport(){
+ const day=document.getElementById('importDate').value;
+ if(!day){alert('Indica la fecha del listado.');return}
+ if(!validateTeams())return;
+
+ pending.forEach(r=>r.medico=doctorMap[norm(r.medicoNombre)]||r.medico||'');
+
+ const rows=pending.filter(r=>r.cama||r.apellido);
+ if(!rows.length){alert('No hay pacientes que guardar.');return}
+ if(db[day]&&!confirm(`Ya existe el ${es(day)}. ¿Sustituirlo?`))return;
+
+ db[day]=rows;current=day;save();closeModal();refreshDates();
+}
+
+function refreshDates(){
+ const dates=Object.keys(db).sort().reverse();
+ if(!current||!db[current])current=dates[0]||'';
+ const sel=document.getElementById('dateSelect');
+ sel.innerHTML=dates.map(d=>`<option value="${d}" ${d===current?'selected':''}>${es(d)}</option>`).join('');
+ document.getElementById('daysInfo').textContent=`${dates.length} día(s) guardados`;
+ render();
+}
+document.getElementById('dateSelect').addEventListener('change',e=>{current=e.target.value;render()});
+document.getElementById('search').addEventListener('input',render);
+
+function render(){
+ const list=(db[current]||[]).map(r=>({...r,estancia:stay(r.ingreso,current)}));
+ const q=norm(document.getElementById('search').value);
+ const shown=q?list.filter(r=>norm(Object.values(r).join(' ')).includes(q)):list;
+ const ss=list.map(r=>r.estancia);
+
+ document.getElementById('total').textContent=list.length;
+ document.getElementById('mean').textContent=list.length?(ss.reduce((a,b)=>a+b,0)/list.length).toFixed(1):'0';
+ document.getElementById('maxStay').textContent=list.length?Math.max(...ss):'0';
+ document.getElementById('newToday').textContent=list.filter(r=>r.ingreso===current).length;
+
+ document.getElementById('body').innerHTML=shown.length
+ ? shown.map(r=>`<tr><td><b>${esc(r.cama)}</b></td><td>${esc(r.apellido)}</td><td><b>${esc(r.medico)}</b></td><td>${esc(r.diagnostico)}</td><td>${esc(es(r.ingreso))}</td><td>${r.estancia}</td></tr>`).join('')
+ : '<tr><td colspan="6">Sin datos.</td></tr>';
+ renderCharts(list);
+}
+
+function renderCharts(list){
+ const ps={P1:0,P2:0,P3:0},dx={};
+ list.forEach(r=>{
+   if(ps[r.medico]!==undefined)ps[r.medico]++;
+   const d=r.diagnostico||'Sin diagnóstico';dx[d]=(dx[d]||0)+1;
+ });
+ if(chartP)chartP.destroy();if(chartDx)chartDx.destroy();
+ chartP=new Chart(document.getElementById('chartP'),{
+   type:'bar',
+   data:{labels:Object.keys(ps),datasets:[{data:Object.values(ps),label:'Pacientes'}]},
+   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+ });
+ const ds=Object.entries(dx).sort((a,b)=>b[1]-a[1]).slice(0,10);
+ chartDx=new Chart(document.getElementById('chartDx'),{
+   type:'bar',
+   data:{labels:ds.map(x=>x[0]),datasets:[{data:ds.map(x=>x[1])}]},
+   options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}
+ });
+}
+
+function deleteDay(){
+ if(current&&confirm(`¿Eliminar ${es(current)}?`)){delete db[current];current='';save();refreshDates()}
+}
+
+function exportBackup(){
+ const payload={database:db,doctorMap};
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+ a.download='monitor_cardiologia_backup.json';
+ a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+document.getElementById('backupInput').addEventListener('change',async e=>{
+ const f=e.target.files[0];e.target.value='';if(!f)return;
+ try{
+   const o=JSON.parse(await f.text());
+   if(confirm('¿Sustituir los datos locales por esta copia?')){
+     if(o.database){db=o.database;doctorMap=o.doctorMap||{}}
+     else db=o;
+     save();saveMap();current='';refreshDates();
+   }
+ }catch{alert('Copia no válida')}
+});
+
+refreshDates();
+</script>
+</body>
+</html>
