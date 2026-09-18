@@ -95,7 +95,7 @@ textarea{width:100%;height:220px;border:1px solid var(--border);border-radius:8p
   <div class="card tablewrap">
     <table>
       <thead><tr>
-        <th>Cama</th><th>Apellido / identificador</th><th>Médico</th><th>Diagnóstico</th>
+        <th>Cama</th><th>Apellido / identificador</th><th>Responsable (P1/P2/P3)</th><th>Diagnóstico</th>
         <th>Fecha ingreso</th><th>Estancia</th>
       </tr></thead>
       <tbody id="patientBody"></tbody>
@@ -126,7 +126,7 @@ textarea{width:100%;height:220px;border:1px solid var(--border);border-radius:8p
         <p class="small">Puedes corregir cualquier campo. No se guarda nada hasta pulsar “Guardar día”.</p>
         <div class="tablewrap previewtable">
           <table>
-            <thead><tr><th>Cama</th><th>Apellido</th><th>Médico</th><th>Diagnóstico</th><th>Ingreso</th><th></th></tr></thead>
+            <thead><tr><th>Cama</th><th>Apellido</th><th>Responsable (P1/P2/P3)</th><th>Diagnóstico</th><th>Ingreso</th><th></th></tr></thead>
             <tbody id="previewBody"></tbody>
           </table>
         </div>
@@ -207,7 +207,7 @@ function renderCharts(list){
   });
   if(doctorChart) doctorChart.destroy(); if(diagChart) diagChart.destroy();
   doctorChart=new Chart(document.getElementById('doctorChart'),{
-    type:'bar',data:{labels:Object.keys(doctorCounts),datasets:[{label:'Pacientes por médico',data:Object.values(doctorCounts)}]},
+    type:'bar',data:{labels:Object.keys(doctorCounts),datasets:[{label:'Pacientes por P1 / P2 / P3',data:Object.values(doctorCounts)}]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}
   });
   const top=Object.entries(diagCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -262,31 +262,113 @@ function detectDate(text, filename=''){
 function parsePatients(text){
   const lines=text.split(/\n+/).map(normalizeSpaces).filter(Boolean);
   const results=[];
-  // formatos habituales: 0501U, 05071, 05102, 05101(Q), 501, etc.
+
+  // Cama: formatos habituales 0501U, 05071, 05102, 05101 (Q), etc.
   const bedRe=/^(?:CAMA\s*)?((?:0?5)?\d{3,4}[A-Z]?(?:\s*\(Q\))?)\b/i;
-  const dateRe=/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})\b/g;
+
+  // Fecha de ingreso.
+  const dateSingleRe=/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})\b/i;
+
+  // Responsable: SOLO P1, P2 o P3.
+  const pRe=/\b(P[123])\b/i;
+
   for(const line of lines){
-    const bm=line.match(bedRe); if(!bm) continue;
+    const bm=line.match(bedRe);
+    if(!bm) continue;
+
     const cama=normalizeSpaces(bm[1]);
-    const dates=[...line.matchAll(dateRe)].map(m=>m[1]);
-    const ingreso=dates.length?esToIso(dates[dates.length-1]):'';
-    let rest=normalizeSpaces(line.replace(bm[0],'').replace(dateRe,' '));
-    // Heurística: primer bloque en mayúsculas como apellido si existe.
-    let apellido='', medico='', diagnostico='';
-    const tokens=rest.split(' ');
-    if(tokens.length){
-      const idx=tokens.findIndex(t=>/^(DR\.?|DRA\.?|P\d+|[A-ZÁÉÍÓÚÑ]{2,}\.?)/i.test(t));
-      if(idx===0 && /^[A-ZÁÉÍÓÚÑ'-]{2,}$/.test(tokens[0])) {
-        apellido=tokens.shift();
-        rest=tokens.join(' ');
+    let rest=normalizeSpaces(line.slice(bm[0].length));
+
+    const pm=rest.match(pRe);
+    const dm=rest.match(dateSingleRe);
+
+    let apellido='';
+    let medico='';
+    let diagnostico='';
+    let ingreso='';
+
+    if(dm) ingreso=esToIso(dm[1]);
+
+    if(pm){
+      medico=pm[1].toUpperCase();
+
+      // Todo lo situado antes de P1/P2/P3 corresponde al identificador/apellido.
+      const beforeP=normalizeSpaces(rest.slice(0, pm.index));
+      apellido=cleanPatientLabel(beforeP);
+
+      // El diagnóstico queda después de P1/P2/P3 y antes de la fecha.
+      const afterPStart=pm.index + pm[0].length;
+      let diagEnd=rest.length;
+
+      if(dm && dm.index > afterPStart) diagEnd=dm.index;
+
+      diagnostico=cleanDiagnosis(rest.slice(afterPStart, diagEnd));
+    } else {
+      // Si no hay P1/P2/P3, no inventamos responsable.
+      // Intentamos conservar la fila para revisión manual.
+      medico='';
+
+      if(dm){
+        const beforeDate=normalizeSpaces(rest.slice(0, dm.index));
+        const split=splitPatientAndDiagnosis(beforeDate);
+        apellido=split.apellido;
+        diagnostico=split.diagnostico;
+      } else {
+        apellido=cleanPatientLabel(rest);
+        diagnostico='';
       }
     }
-    diagnostico=rest;
-    results.push({cama,apellido,medico,diagnostico,ingreso});
+
+    results.push({
+      cama,
+      apellido,
+      medico,
+      diagnostico,
+      ingreso
+    });
   }
-  // quitar duplicados de cama conservando el primero
+
+  // Quitar duplicados de cama conservando el primero.
   const seen=new Set();
   return results.filter(r=>!seen.has(r.cama) && seen.add(r.cama));
+}
+
+function cleanPatientLabel(s){
+  s=normalizeSpaces(s);
+
+  // Quitar posibles etiquetas de columna.
+  s=s.replace(/^(PACIENTE|APELLIDO|NOMBRE)\s*[:\-]?\s*/i,'');
+
+  // Evitar que el responsable quede pegado al paciente por errores del PDF.
+  s=s.replace(/\bP[123]\b.*$/i,'');
+
+  return normalizeSpaces(s);
+}
+
+function cleanDiagnosis(s){
+  s=normalizeSpaces(s);
+
+  // Quitar encabezados o separadores frecuentes.
+  s=s.replace(/^(DIAGN[ÓO]STICO(?:\s+PRINCIPAL)?|DX)\s*[:\-]?\s*/i,'');
+  s=s.replace(/\s*[|;]\s*$/,'');
+  s=s.replace(/\bFECHA\s+INGRESO\b.*$/i,'');
+
+  return normalizeSpaces(s);
+}
+
+function splitPatientAndDiagnosis(s){
+  s=normalizeSpaces(s);
+
+  // Sin P1/P2/P3 la separación no puede ser fiable.
+  // Conservamos la primera palabra como identificador y el resto como diagnóstico
+  // únicamente para facilitar la revisión manual.
+  const parts=s.split(' ');
+  if(parts.length<=1) return {apellido:s, diagnostico:''};
+
+  return {
+    apellido:parts.shift(),
+    diagnostico:cleanDiagnosis(parts.join(' '))
+  };
 }
 
 function openImport(text, filename){
@@ -308,7 +390,14 @@ function renderPreview(){
   <tr>
     <td><input value="${escapeHtml(p.cama)}" oninput="setRow(${i},'cama',this.value)"></td>
     <td><input value="${escapeHtml(p.apellido)}" oninput="setRow(${i},'apellido',this.value)"></td>
-    <td><input value="${escapeHtml(p.medico)}" oninput="setRow(${i},'medico',this.value)"></td>
+    <td>
+      <select oninput="setRow(${i},'medico',this.value)">
+        <option value="" ${p.medico===''?'selected':''}>—</option>
+        <option value="P1" ${p.medico==='P1'?'selected':''}>P1</option>
+        <option value="P2" ${p.medico==='P2'?'selected':''}>P2</option>
+        <option value="P3" ${p.medico==='P3'?'selected':''}>P3</option>
+      </select>
+    </td>
     <td><input value="${escapeHtml(p.diagnostico)}" oninput="setRow(${i},'diagnostico',this.value)"></td>
     <td><input type="date" value="${escapeHtml(p.ingreso)}" oninput="setRow(${i},'ingreso',this.value)"></td>
     <td><button class="danger" onclick="removePreviewRow(${i})">×</button></td>
