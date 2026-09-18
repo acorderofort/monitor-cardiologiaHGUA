@@ -1,295 +1,360 @@
-# Create index.html again to generate a fresh file link for the user
-code_content = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitorización Hospitalaria - Servicio de Cardiología</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    </script>
-    <style>
-        :root {
-            --primary: #2b5c8f;
-            --secondary: #348a8e;
-            --accent: #e74c3c;
-            --bg: #f4f6f9;
-            --card-bg: #ffffff;
-            --text: #333333;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; color: var(--text); }
-        .container { max-width: 1400px; margin: 0 auto; background: var(--card-bg); border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eaeeef; padding-bottom: 15px; margin-bottom: 20px; }
-        .title { font-size: 1.4rem; font-weight: bold; color: var(--primary); }
-        .btn-upload { background-color: var(--accent); color: white; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px; flex-wrap: wrap; }
-        .tab-btn { padding: 8px 16px; border: none; background: #e9ecef; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: bold; color: #495057; }
-        .tab-btn.active { background: var(--primary); color: white; }
-        .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
-        .kpi-card { background: var(--primary); color: white; padding: 20px; border-radius: 8px; text-align: center; }
-        .kpi-card.teal { background: var(--secondary); }
-        .kpi-value { font-size: 2.2rem; font-weight: bold; margin-bottom: 5px; }
-        .kpi-label { font-size: 0.9rem; opacity: 0.9; }
-        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
-        .chart-box { background: #fafafa; padding: 15px; border-radius: 8px; border: 1px solid #eee; height: 320px; }
-        .table-section { margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { background: var(--primary); color: white; text-align: left; padding: 12px; font-size: 0.95rem; }
-        td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-        tr:nth-child(even) { background-color: #f8f9fa; }
-        .loading-banner { display: none; background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; margin-bottom: 15px; text-align: center; font-weight: bold; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cuadro de mando - Pacientes hospitalizados</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --primary:#1f4e79; --secondary:#2f7d8c; --accent:#c0392b; --bg:#f4f7fb;
+  --card:#fff; --text:#25313c; --muted:#6c7a89; --border:#dce4ec; --ok:#26734d;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--text)}
+.container{max-width:1500px;margin:auto;padding:24px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:20px}
+h1{font-size:24px;margin:0;color:var(--primary)}
+.subtitle{color:var(--muted);font-size:14px;margin-top:5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.filelabel{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px}
+.primary{background:var(--primary);color:#fff}.secondary{background:#e8eef4;color:var(--primary)}
+.danger{background:#fbe9e7;color:#a93226}.success{background:var(--ok);color:#fff}
+.filelabel{background:var(--accent);color:#fff;display:inline-block}
+input[type=file]{display:none}
+.notice{background:#eaf4ff;border:1px solid #bad9f5;border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:18px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(25,50,75,.05)}
+.kpi{padding:18px}.kpi .value{font-size:30px;font-weight:800;color:var(--primary)}.kpi .label{font-size:13px;color:var(--muted);margin-top:4px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px;margin-bottom:18px}
+select,input[type=text],input[type=date]{border:1px solid var(--border);border-radius:7px;padding:9px;background:#fff}
+.search{min-width:260px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.chartbox{height:330px;padding:14px}
+.tablewrap{overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:1000px}
+th,td{padding:10px 11px;border-bottom:1px solid #edf1f5;text-align:left;font-size:13px}
+th{background:var(--primary);color:#fff;position:sticky;top:0}
+tbody tr:nth-child(even){background:#fafcfe}
+.small{font-size:12px;color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(15,25,35,.55);display:none;align-items:flex-start;justify-content:center;padding:30px;z-index:20;overflow:auto}
+.modal.show{display:flex}
+.modalbox{background:#fff;width:min(1450px,98vw);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modalhead{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:12px}
+.modalhead h2{margin:0;color:var(--primary)}
+.previewgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+textarea{width:100%;height:220px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:monospace;font-size:12px}
+.previewtable input{width:100%;padding:6px;border:1px solid #dfe6ec;border-radius:5px}
+.status{font-size:13px;font-weight:700}
+.ok{color:var(--ok)}.warn{color:#b9770e}.error{color:#b03a2e}
+@media(max-width:900px){.kpis{grid-template-columns:1fr 1fr}.charts,.previewgrid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
+</style>
 </head>
 <body>
 <div class="container">
-    <header>
-        <div class="title">MONITORIZACIÓN HOSPITALARIA - SERVICIO DE CARDIOLOGÍA</div>
-        <button class="btn-upload" onclick="document.getElementById('pdfInput').click()">[+] Añadir PDF con Pacientes Hoy</button>
-        <input type="file" id="pdfInput" accept="application/pdf" style="display:none;" onchange="handlePDF(event)">
-    </header>
+  <header>
+    <div>
+      <h1>MONITORIZACIÓN HOSPITALARIA · CARDIOLOGÍA</h1>
+      <div class="subtitle">Carga diaria de listados PDF · histórico local · cuadro de mando</div>
+    </div>
+    <div class="actions">
+      <label class="filelabel" for="pdfInput">+ Cargar PDF del día</label>
+      <input id="pdfInput" type="file" accept="application/pdf">
+      <button class="secondary" onclick="exportJSON()">Exportar copia de seguridad</button>
+      <label class="secondary" for="jsonInput">Importar copia</label>
+      <input id="jsonInput" type="file" accept="application/json">
+    </div>
+  </header>
 
-    <div id="loadingBanner" class="loading-banner">Procesando archivo PDF y extrayendo pacientes... por favor espere.</div>
+  <div class="notice">
+    <b>Privacidad:</b> los datos se procesan y almacenan únicamente en este navegador mediante <b>localStorage</b>.
+    Esta página no envía los pacientes a ningún servidor. Antes de guardar un PDF, se muestra una vista previa editable.
+  </div>
 
-    <div class="tabs" id="dateTabs"></div>
+  <div class="toolbar card">
+    <b>Fecha:</b>
+    <select id="dateSelect"></select>
+    <input id="searchBox" class="search" type="text" placeholder="Buscar cama, apellido, médico o diagnóstico…">
+    <span id="dateInfo" class="small"></span>
+    <button class="danger" onclick="deleteCurrentDay()">Eliminar día seleccionado</button>
+  </div>
 
-    <div class="kpi-row">
-        <div class="kpi-card">
-            <div class="kpi-value" id="kpiTotal">0</div>
-            <div class="kpi-label">Pacientes Hospitalizados</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-value" id="kpiMedia">0 Días</div>
-            <div class="kpi-label">Estancia Media General</div>
-        </div>
-        <div class="kpi-card teal">
-            <div class="kpi-value" id="kpiRango">0 / 0 Días</div>
-            <div class="kpi-label">Estancia Máxima / Mínima</div>
-        </div>
+  <div class="kpis">
+    <div class="card kpi"><div class="value" id="kpiTotal">0</div><div class="label">Pacientes hospitalizados</div></div>
+    <div class="card kpi"><div class="value" id="kpiMean">0</div><div class="label">Estancia media (días)</div></div>
+    <div class="card kpi"><div class="value" id="kpiMax">0</div><div class="label">Estancia máxima (días)</div></div>
+    <div class="card kpi"><div class="value" id="kpiNew">0</div><div class="label">Ingresos del día</div></div>
+  </div>
+
+  <div class="charts">
+    <div class="card chartbox"><canvas id="doctorChart"></canvas></div>
+    <div class="card chartbox"><canvas id="diagChart"></canvas></div>
+  </div>
+
+  <div class="card tablewrap">
+    <table>
+      <thead><tr>
+        <th>Cama</th><th>Apellido / identificador</th><th>Médico</th><th>Diagnóstico</th>
+        <th>Fecha ingreso</th><th>Estancia</th>
+      </tr></thead>
+      <tbody id="patientBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="importModal" class="modal">
+  <div class="modalbox">
+    <div class="modalhead">
+      <div>
+        <h2>Revisar pacientes antes de guardar</h2>
+        <div id="importStatus" class="status"></div>
+      </div>
+      <button class="secondary" onclick="closeImport()">Cerrar</button>
     </div>
 
-    <div class="charts-row">
-        <div class="chart-box"><canvas id="chartMedicos"></canvas></div>
-        <div class="chart-box"><canvas id="chartDiags"></canvas></div>
+    <div class="previewgrid">
+      <div>
+        <label><b>Fecha del listado</b></label><br>
+        <input type="date" id="importDate">
+        <p class="small">Si la fecha no se detecta correctamente, cámbiala aquí.</p>
+        <label><b>Texto extraído del PDF</b></label>
+        <textarea id="rawText" readonly></textarea>
+      </div>
+      <div>
+        <b>Pacientes detectados</b>
+        <p class="small">Puedes corregir cualquier campo. No se guarda nada hasta pulsar “Guardar día”.</p>
+        <div class="tablewrap previewtable">
+          <table>
+            <thead><tr><th>Cama</th><th>Apellido</th><th>Médico</th><th>Diagnóstico</th><th>Ingreso</th><th></th></tr></thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="secondary" onclick="addPreviewRow()">+ Añadir paciente</button>
+          <button class="success" onclick="saveImportedDay()">Guardar día y actualizar cuadro</button>
+        </div>
+      </div>
     </div>
-
-    <div class="table-section">
-        <h3>Listado Detallado de Pacientes Hospitalizados</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Cama</th>
-                    <th>Primer Apellido</th>
-                    <th>Médico Responsable</th>
-                    <th>Diagnóstico Principal</th>
-                    <th>Fecha Ingreso</th>
-                    <th>Estancia</th>
-                </tr>
-            </thead>
-            <tbody id="patientTableBody"></tbody>
-        </table>
-    </div>
+  </div>
 </div>
 
 <script>
-    let database = {
-        "14/09/2026": [
-            {cama: "0501U", apellido: "MUÑOZ", medico: "P1", diagnostico: "TAQUICARDIA VENTRICULAR MONOMORFA SOSTENIDA", ingreso: "12/09/2026"},
-            {cama: "0502U", apellido: "MORENO", medico: "P2", diagnostico: "SCA", ingreso: "07/09/2026"},
-            {cama: "05071", apellido: "MILLAN", medico: "P2", diagnostico: "EAO SEVERA", ingreso: "10/09/2026"},
-            {cama: "05091", apellido: "REINA", medico: "P3", diagnostico: "SCA", ingreso: "11/09/2026"},
-            {cama: "05101 (Q)", apellido: "SANCHEZ", medico: "P2", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05102 (Q)", apellido: "RICHARTE", medico: "P1", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05112 (Q)", apellido: "FERNANDEZ", medico: "P2", diagnostico: "DOLOR TORACICO EN PACIENTE EN HEMODIALISIS", ingreso: "07/09/2026"},
-            {cama: "05121", apellido: "AIELLO", medico: "P3", diagnostico: "EAO SEVERA", ingreso: "09/09/2026"},
-            {cama: "05122", apellido: "GARCIA", medico: "P1", diagnostico: "SCACEST", ingreso: "11/09/2026"},
-            {cama: "05131", apellido: "MOLINA", medico: "P2", diagnostico: "IC DESCOMPENSADA", ingreso: "07/09/2026"},
-            {cama: "05132 (Q)", apellido: "SOLER", medico: "P1", diagnostico: "SACACEST", ingreso: "07/09/2026"},
-            {cama: "05141 (Q)", apellido: "GOMEZ", medico: "P3", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05142", apellido: "MERCADER", medico: "P3", diagnostico: "DOLOR TORACICO A ESTUDIO", ingreso: "14/09/2026"},
-            {cama: "05162", apellido: "ALONSO", medico: "P1", diagnostico: "DESCOMPENSACION DE INSUFICIENCIA CARDIACA", ingreso: "08/09/2026"},
-            {cama: "05172", apellido: "MARTINEZ", medico: "P1", diagnostico: "INSUFICIENCIA CARDIACA DE NOVO", ingreso: "11/09/2026"}
-        ],
-        "13/09/2026": [
-            {cama: "0501U", apellido: "MUÑOZ", medico: "P1", diagnostico: "TAQUICARDIA VENTRICULAR MONOMORFA SOSTENIDA", ingreso: "12/09/2026"},
-            {cama: "0502U", apellido: "MORENO", medico: "P2", diagnostico: "SCA", ingreso: "07/09/2026"},
-            {cama: "05071", apellido: "MILLAN", medico: "P2", diagnostico: "EAO SEVERA", ingreso: "10/09/2026"},
-            {cama: "05091", apellido: "REINA", medico: "P3", diagnostico: "SCA", ingreso: "11/09/2026"},
-            {cama: "05101 (Q)", apellido: "SANCHEZ", medico: "P2", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05102 (Q)", apellido: "RICHARTE", medico: "P1", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05112 (Q)", apellido: "FERNANDEZ", medico: "P2", diagnostico: "DOLOR TORACICO EN PACIENTE EN HEMODIALISIS", ingreso: "07/09/2026"},
-            {cama: "05121", apellido: "AIELLO", medico: "P3", diagnostico: "EAO SEVERA", ingreso: "09/09/2026"},
-            {cama: "05122", apellido: "GARCIA", medico: "P1", diagnostico: "SCACEST", ingreso: "11/09/2026"},
-            {cama: "05131", apellido: "MOLINA", medico: "P2", diagnostico: "IC DESCOMPENSADA", ingreso: "07/09/2026"},
-            {cama: "05132 (Q)", apellido: "SOLER", medico: "P1", diagnostico: "SACACEST", ingreso: "07/09/2026"},
-            {cama: "05141 (Q)", apellido: "GOMEZ", medico: "P3", diagnostico: "EAO SEVERA", ingreso: "13/09/2026"},
-            {cama: "05162", apellido: "ALONSO", medico: "P1", diagnostico: "DESCOMPENSACION DE INSUFICIENCIA CARDIACA", ingreso: "08/09/2026"}
-        ]
-    };
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    let currentDate = "14/09/2026";
-    let chart1, chart2;
+const STORAGE_KEY = 'cardioDailyPatientsV2';
+let db = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+let currentDate = '';
+let importedRows = [];
+let doctorChart = null, diagChart = null;
 
-    function parseDate(str) {
-        if(!str) return new Date();
-        const p = str.split('/');
-        if(p.length < 3) return new Date();
-        return new Date(p[2], p[1] - 1, p[0]);
+function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+function pad(n){return String(n).padStart(2,'0')}
+function isoToEs(iso){if(!iso)return''; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`}
+function esToIso(es){
+  if(!es) return '';
+  let m=String(es).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  return m ? `${m[3]}-${pad(m[2])}-${pad(m[1])}` : '';
+}
+function dateObj(v){
+  const iso = v.includes('/') ? esToIso(v) : v;
+  if(!iso) return null;
+  const [y,m,d]=iso.split('-').map(Number); return new Date(y,m-1,d);
+}
+function daysBetween(a,b){
+  const da=dateObj(a), dbb=dateObj(b); if(!da||!dbb)return 0;
+  return Math.max(0, Math.floor((dbb-da)/86400000));
+}
+function normalizeSpaces(s){return (s||'').replace(/\s+/g,' ').trim()}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function refreshDates(selectNewest=false){
+  const sel=document.getElementById('dateSelect');
+  const dates=Object.keys(db).sort().reverse();
+  if(selectNewest && dates.length) currentDate=dates[0];
+  if(!currentDate || !db[currentDate]) currentDate=dates[0] || '';
+  sel.innerHTML=dates.map(d=>`<option value="${d}" ${d===currentDate?'selected':''}>${isoToEs(d)}</option>`).join('');
+  document.getElementById('dateInfo').textContent=dates.length ? `${dates.length} día(s) guardados en este navegador` : 'Todavía no hay listados guardados';
+  render();
+}
+document.getElementById('dateSelect').addEventListener('change',e=>{currentDate=e.target.value;render()});
+document.getElementById('searchBox').addEventListener('input',render);
+
+function render(){
+  const list=(db[currentDate]||[]).map(p=>({...p,stay:daysBetween(p.ingreso,currentDate)}));
+  const q=document.getElementById('searchBox').value.toLowerCase().trim();
+  const filtered=q?list.filter(p=>Object.values(p).join(' ').toLowerCase().includes(q)):list;
+  const stays=list.map(x=>x.stay);
+  document.getElementById('kpiTotal').textContent=list.length;
+  document.getElementById('kpiMean').textContent=list.length?(stays.reduce((a,b)=>a+b,0)/list.length).toFixed(1):'0';
+  document.getElementById('kpiMax').textContent=list.length?Math.max(...stays):'0';
+  document.getElementById('kpiNew').textContent=list.filter(p=>p.ingreso===currentDate).length;
+
+  document.getElementById('patientBody').innerHTML=filtered.length?filtered.map(p=>`
+    <tr><td><b>${escapeHtml(p.cama)}</b></td><td>${escapeHtml(p.apellido)}</td>
+    <td>${escapeHtml(p.medico)}</td><td>${escapeHtml(p.diagnostico)}</td>
+    <td>${escapeHtml(isoToEs(p.ingreso)||p.ingreso)}</td><td><b>${p.stay}</b></td></tr>`).join('')
+    : `<tr><td colspan="6" class="small">No hay pacientes para mostrar.</td></tr>`;
+  renderCharts(list);
+}
+
+function renderCharts(list){
+  const doctorCounts={}, diagCounts={};
+  list.forEach(p=>{
+    const d=normalizeSpaces(p.medico)||'Sin asignar'; doctorCounts[d]=(doctorCounts[d]||0)+1;
+    const x=normalizeSpaces(p.diagnostico)||'Sin diagnóstico'; diagCounts[x]=(diagCounts[x]||0)+1;
+  });
+  if(doctorChart) doctorChart.destroy(); if(diagChart) diagChart.destroy();
+  doctorChart=new Chart(document.getElementById('doctorChart'),{
+    type:'bar',data:{labels:Object.keys(doctorCounts),datasets:[{label:'Pacientes por médico',data:Object.values(doctorCounts)}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}
+  });
+  const top=Object.entries(diagCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  diagChart=new Chart(document.getElementById('diagChart'),{
+    type:'bar',data:{labels:top.map(x=>x[0]),datasets:[{label:'Diagnósticos',data:top.map(x=>x[1])}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}
+  });
+}
+
+document.getElementById('pdfInput').addEventListener('change',async e=>{
+  const file=e.target.files[0]; if(!file)return;
+  try{
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    let pages=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      // reconstruct approximate lines using y coordinate
+      const items=content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5]}));
+      items.sort((a,b)=>Math.abs(b.y-a.y)>2?b.y-a.y:a.x-b.x);
+      let lines=[], current=[], lastY=null;
+      for(const it of items){
+        if(lastY===null || Math.abs(it.y-lastY)<=2){current.push(it.str)}
+        else{lines.push(current.join(' ')); current=[it.str]}
+        lastY=it.y;
+      }
+      if(current.length) lines.push(current.join(' '));
+      pages.push(lines.join('\n'));
     }
+    const text=pages.join('\n');
+    openImport(text, file.name);
+  }catch(err){
+    alert('No se pudo leer el PDF. Si es un PDF escaneado como imagen, necesitará OCR.');
+    console.error(err);
+  } finally { e.target.value=''; }
+});
 
-    function renderApp() {
-        const tabContainer = document.getElementById('dateTabs');
-        tabContainer.innerHTML = '';
-        Object.keys(database).sort().reverse().forEach(date => {
-            const btn = document.createElement('button');
-            btn.className = `tab-btn ${date === currentDate ? 'active' : ''}`;
-            btn.innerText = date;
-            btn.onclick = () => { currentDate = date; renderApp(); };
-            tabContainer.appendChild(btn);
-        });
+function detectDate(text, filename=''){
+  const candidates=(filename+' '+text).match(/\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4}\b/g)||[];
+  if(candidates.length) return esToIso(candidates[0]);
+  const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
 
-        const list = database[currentDate] || [];
-        const refDate = parseDate(currentDate);
-
-        let totalEstancia = 0, maxE = 0, minE = 999;
-        const processed = list.map(p => {
-            const ing = parseDate(p.ingreso);
-            const diff = Math.max(0, Math.floor((refDate - ing) / (1000 * 60 * 60 * 24)));
-            totalEstancia += diff;
-            if (diff > maxE) maxE = diff;
-            if (diff < minE) minE = diff;
-            return { ...p, estancia: diff };
-        });
-
-        if (list.length === 0) { minE = 0; }
-
-        document.getElementById('kpiTotal').innerText = list.length;
-        document.getElementById('kpiMedia').innerText = list.length ? (totalEstancia / list.length).toFixed(1) + ' Días' : '0 Días';
-        document.getElementById('kpiRango').innerText = `${maxE} Días / ${minE} Días`;
-
-        const tbody = document.getElementById('patientTableBody');
-        tbody.innerHTML = processed.map(p => `
-            <tr>
-                <td><b>${p.cama}</b></td>
-                <td>${p.apellido}</td>
-                <td><span style="background:#e2e8f0; padding:2px 8px; border-radius:4px; font-weight:bold;">${p.medico}</span></td>
-                <td>${p.diagnostico}</td>
-                <td>${p.ingreso}</td>
-                <td><b>${p.estancia} días</b></td>
-            </tr>
-        `).join('');
-
-        const medCounts = { P1: 0, P2: 0, P3: 0 };
-        const diagCounts = {};
-        processed.forEach(p => {
-            medCounts[p.medico] = (medCounts[p.medico] || 0) + 1;
-            diagCounts[p.diagnostico] = (diagCounts[p.diagnostico] || 0) + 1;
-        });
-
-        if (chart1) chart1.destroy();
-        if (chart2) chart2.destroy();
-
-        chart1 = new Chart(document.getElementById('chartMedicos'), {
-            type: 'bar',
-            data: {
-                labels: Object.keys(medCounts),
-                datasets: [{ label: 'Pacientes Asignados', data: Object.values(medCounts), backgroundColor: '#2b5c8f' }]
-            },
-            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
-        });
-
-        chart2 = new Chart(document.getElementById('chartDiags'), {
-            type: 'bar',
-            data: {
-                labels: Object.keys(diagCounts),
-                datasets: [{ label: 'Número de Casos', data: Object.values(diagCounts), backgroundColor: '#348a8e' }]
-            },
-            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
-        });
+/*
+ Parser conservador:
+ - Intenta identificar una cama al principio de cada línea.
+ - Busca fechas y deja el resto como texto.
+ - NO inventa nombres, médicos ni diagnósticos.
+ La vista previa permite completar/corregir campos.
+*/
+function parsePatients(text){
+  const lines=text.split(/\n+/).map(normalizeSpaces).filter(Boolean);
+  const results=[];
+  // formatos habituales: 0501U, 05071, 05102, 05101(Q), 501, etc.
+  const bedRe=/^(?:CAMA\s*)?((?:0?5)?\d{3,4}[A-Z]?(?:\s*\(Q\))?)\b/i;
+  const dateRe=/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})\b/g;
+  for(const line of lines){
+    const bm=line.match(bedRe); if(!bm) continue;
+    const cama=normalizeSpaces(bm[1]);
+    const dates=[...line.matchAll(dateRe)].map(m=>m[1]);
+    const ingreso=dates.length?esToIso(dates[dates.length-1]):'';
+    let rest=normalizeSpaces(line.replace(bm[0],'').replace(dateRe,' '));
+    // Heurística: primer bloque en mayúsculas como apellido si existe.
+    let apellido='', medico='', diagnostico='';
+    const tokens=rest.split(' ');
+    if(tokens.length){
+      const idx=tokens.findIndex(t=>/^(DR\.?|DRA\.?|P\d+|[A-ZÁÉÍÓÚÑ]{2,}\.?)/i.test(t));
+      if(idx===0 && /^[A-ZÁÉÍÓÚÑ'-]{2,}$/.test(tokens[0])) {
+        apellido=tokens.shift();
+        rest=tokens.join(' ');
+      }
     }
+    diagnostico=rest;
+    results.push({cama,apellido,medico,diagnostico,ingreso});
+  }
+  // quitar duplicados de cama conservando el primero
+  const seen=new Set();
+  return results.filter(r=>!seen.has(r.cama) && seen.add(r.cama));
+}
 
-    async function handlePDF(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+function openImport(text, filename){
+  importedRows=parsePatients(text);
+  document.getElementById('rawText').value=text;
+  document.getElementById('importDate').value=detectDate(text,filename);
+  document.getElementById('importStatus').className='status '+(importedRows.length?'ok':'warn');
+  document.getElementById('importStatus').textContent=importedRows.length
+    ? `${importedRows.length} posible(s) paciente(s) detectados. Revísalos antes de guardar.`
+    : 'No he detectado filas de pacientes automáticamente. Puedes añadirlas manualmente.';
+  renderPreview();
+  document.getElementById('importModal').classList.add('show');
+}
+function closeImport(){document.getElementById('importModal').classList.remove('show')}
 
-        document.getElementById('loadingBanner').style.display = 'block';
+function renderPreview(){
+  const tb=document.getElementById('previewBody');
+  tb.innerHTML=importedRows.map((p,i)=>`
+  <tr>
+    <td><input value="${escapeHtml(p.cama)}" oninput="setRow(${i},'cama',this.value)"></td>
+    <td><input value="${escapeHtml(p.apellido)}" oninput="setRow(${i},'apellido',this.value)"></td>
+    <td><input value="${escapeHtml(p.medico)}" oninput="setRow(${i},'medico',this.value)"></td>
+    <td><input value="${escapeHtml(p.diagnostico)}" oninput="setRow(${i},'diagnostico',this.value)"></td>
+    <td><input type="date" value="${escapeHtml(p.ingreso)}" oninput="setRow(${i},'ingreso',this.value)"></td>
+    <td><button class="danger" onclick="removePreviewRow(${i})">×</button></td>
+  </tr>`).join('');
+}
+function setRow(i,k,v){importedRows[i][k]=v}
+function addPreviewRow(){importedRows.push({cama:'',apellido:'',medico:'',diagnostico:'',ingreso:''});renderPreview()}
+function removePreviewRow(i){importedRows.splice(i,1);renderPreview()}
 
-        try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            let fullText = "";
+function saveImportedDay(){
+  const date=document.getElementById('importDate').value;
+  if(!date){alert('Indica la fecha del listado.');return}
+  const clean=importedRows.map(p=>({
+    cama:normalizeSpaces(p.cama),apellido:normalizeSpaces(p.apellido),
+    medico:normalizeSpaces(p.medico),diagnostico:normalizeSpaces(p.diagnostico),ingreso:p.ingreso
+  })).filter(p=>p.cama||p.apellido);
+  if(!clean.length && !confirm('No hay pacientes en la lista. ¿Guardar igualmente este día vacío?')) return;
+  if(db[date] && !confirm(`Ya hay un listado guardado para ${isoToEs(date)}. ¿Quieres sustituirlo?`)) return;
+  db[date]=clean; currentDate=date; saveDB(); closeImport(); refreshDates();
+}
 
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(" ");
-                fullText += " " + pageText;
-            }
+function deleteCurrentDay(){
+  if(!currentDate)return;
+  if(confirm(`¿Eliminar el listado del ${isoToEs(currentDate)} de este navegador?`)){
+    delete db[currentDate]; currentDate=''; saveDB(); refreshDates(true);
+  }
+}
 
-            const dateMatch = fullText.match(/(\\d{2}\\/\\d{2}\\/\\d{4})/);
-            const todayStr = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const pdfDate = dateMatch ? dateMatch[1] : todayStr;
-
-            const parsedPatients = parsePdfTextToPatients(fullText);
-
-            if (parsedPatients.length > 0) {
-                database[pdfDate] = parsedPatients;
-                currentDate = pdfDate;
-                renderApp();
-                alert(`¡Éxito! Se procesó el PDF del ${pdfDate} con ${parsedPatients.length} pacientes.`);
-            } else {
-                const fallbackList = Array.from({length: Math.floor(Math.random()*4) + 12}, (_, i) => ({
-                    cama: `05${10+i}`,
-                    apellido: ["GARCIA", "LOPEZ", "PEREZ", "SANCHEZ", "RODRIGUEZ"][i % 5],
-                    medico: `P${(i % 3) + 1}`,
-                    diagnostico: ["EAO SEVERA", "SCA", "SCACEST", "IC DESCOMPENSADA"][i % 4],
-                    ingreso: pdfDate
-                }));
-                database[pdfDate] = fallbackList;
-                currentDate = pdfDate;
-                renderApp();
-                alert(`¡PDF de fecha ${pdfDate} cargado correctamente con ${fallbackList.length} pacientes!`);
-            }
-
-        } catch (err) {
-            console.error("Error procesando PDF:", err);
-            alert("Ocurrió un error al leer el archivo PDF.");
-        } finally {
-            document.getElementById('loadingBanner').style.display = 'none';
-        }
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='cardiologia_copia_seguridad.json';a.click();URL.revokeObjectURL(a.href);
+}
+document.getElementById('jsonInput').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const obj=JSON.parse(await f.text());
+    if(typeof obj!=='object'||Array.isArray(obj))throw new Error();
+    if(confirm('La copia importada sustituirá los datos guardados en este navegador. ¿Continuar?')){
+      db=obj;saveDB();currentDate='';refreshDates(true);
     }
+  }catch{alert('El archivo JSON no es una copia de seguridad válida.')}
+  e.target.value='';
+});
 
-    function parsePdfTextToPatients(text) {
-        const bedRegex = /(05\\d{2}[U|Q|\\d]?(\\s*\\(Q\\))?)/g;
-        const beds = text.match(bedRegex);
-        if (!beds || beds.length === 0) return [];
-
-        const patients = [];
-        const doctors = ["P1", "P2", "P3"];
-        const diags = ["EAO SEVERA", "SCA", "SCACEST", "IC DESCOMPENSADA", "TAQUICARDIA VENTRICULAR"];
-        const apellidos = ["MUÑOZ", "MORENO", "MILLAN", "REINA", "SANCHEZ", "RICHARTE", "FERNANDEZ", "AIELLO", "GARCIA", "MOLINA"];
-
-        beds.forEach((b, idx) => {
-            patients.push({
-                cama: b,
-                apellido: apellidos[idx % apellidos.length],
-                medico: doctors[idx % doctors.length],
-                diagnostico: diags[idx % diags.length],
-                ingreso: "10/09/2026"
-            });
-        });
-
-        return patients;
-    }
-
-    renderApp();
+refreshDates(true);
 </script>
 </body>
 </html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(code_content)
-
-print("File recreated.")
