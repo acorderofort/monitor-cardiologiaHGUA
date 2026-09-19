@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor Cardiología HGUA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--blue:#24577f;--teal:#33858d;--red:#bd4338;--bg:#f3f6f9;--border:#d9e2ea;--text:#263746}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--text)}
+main{max-width:1450px;margin:auto;padding:22px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:18px}
+h1{margin:0;color:var(--blue);font-size:23px}.sub{color:#6c7a86;font-size:13px;margin-top:5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}
+.btnLoad{background:var(--red);color:white}.secondary{background:#e6edf3;color:var(--blue)}.green{background:#287451;color:white}.danger{background:#f8e7e5;color:#a5352c}
+input[type=file]{display:none}
+.card{background:#fff;border:1px solid var(--border);border-radius:11px;box-shadow:0 2px 8px rgba(20,45,65,.05)}
+.notice{padding:11px 14px;margin-bottom:15px;font-size:13px;background:#eef7ff}
+.toolbar{padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+select,input{padding:8px;border:1px solid var(--border);border-radius:6px;background:white}
+#search{min-width:260px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:15px}
+.kpi{padding:16px}.value{font-size:29px;font-weight:800;color:var(--blue)}.label{font-size:12px;color:#71808c}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px}.chart{height:300px;padding:12px}
+.tableWrap{overflow:auto} table{border-collapse:collapse;width:100%;min-width:950px}
+th,td{padding:9px 10px;border-bottom:1px solid #edf1f4;text-align:left;font-size:13px}
+th{background:var(--blue);color:#fff}tbody tr:nth-child(even){background:#f9fbfc}
+.modal{position:fixed;inset:0;background:rgba(12,25,38,.58);display:none;align-items:flex-start;justify-content:center;padding:25px;overflow:auto;z-index:10}
+.modal.show{display:flex}.box{background:#fff;border-radius:12px;padding:18px;width:min(1400px,98vw)}
+.modalHead{display:flex;justify-content:space-between;gap:15px;align-items:start;margin-bottom:12px}.modalHead h2{margin:0;color:var(--blue)}
+.preview input,.preview select{width:100%;min-width:90px}.preview .diag{min-width:300px}.preview .name{min-width:150px}
+.status{font-size:13px;margin-top:5px;font-weight:700}.ok{color:#24724d}.warn{color:#a5670c}
+.small{font-size:12px;color:#72808d}.footerActions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+@media(max-width:850px){header{flex-direction:column;align-items:flex-start}.kpis,.charts{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f3f6f9;padding:20px;">
+  <div style="width:min(430px,95vw);background:white;border:1px solid #d9e2ea;border-radius:14px;padding:28px;box-shadow:0 8px 30px rgba(20,45,65,.12)">
+    <h2 style="margin:0 0 6px;color:#24577f">Monitor Cardiología HGUA</h2>
+    <div style="color:#6c7a86;font-size:13px;margin-bottom:20px">Acceso protegido · datos centralizados en Supabase</div>
+    <label style="font-weight:700;font-size:13px">Correo electrónico</label>
+    <input id="loginEmail" type="email" style="width:100%;margin:6px 0 14px;padding:10px;border:1px solid #d9e2ea;border-radius:7px" autocomplete="username">
+    <label style="font-weight:700;font-size:13px">Contraseña</label>
+    <input id="loginPassword" type="password" style="width:100%;margin:6px 0 14px;padding:10px;border:1px solid #d9e2ea;border-radius:7px" autocomplete="current-password">
+    <button id="loginBtn" style="width:100%;border:0;border-radius:8px;padding:11px;background:#24577f;color:white;font-weight:800;cursor:pointer">Entrar</button>
+    <div id="loginMsg" style="margin-top:12px;font-size:13px;color:#b03a2e"></div>
+  </div>
+</div>
+<div id="appScreen" style="display:none">
+<main>
+<header>
+ <div><h1>MONITORIZACIÓN HOSPITALARIA · CARDIOLOGÍA</h1><div class="sub">Hospital General Universitario Dr. Balmis · histórico diario</div></div>
+ <div class="actions">
+  <label class="btn btnLoad" for="pdfInput">+ Cargar PDF del día</label>
+  <input id="pdfInput" type="file" accept=".pdf,application/pdf">
+  <button class="secondary" onclick="exportBackup()">Exportar copia</button>
+  <label class="btn secondary" for="backupInput">Importar copia</label>
+<button class="secondary" id="logoutBtn">Cerrar sesión</button>
+  <input id="backupInput" type="file" accept=".json,application/json">
+ </div>
+</header>
+<div class="toolbar card">
+ <b>Fecha:</b><select id="dateSelect"></select>
+ <input id="search" placeholder="Buscar paciente, cama o diagnóstico…">
+ <span id="daysInfo" class="small"></span>
+ <button class="danger" onclick="deleteDay()">Eliminar día</button>
+</div>
+
+<div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+ <div class="card kpi"><div class="value" id="total">0</div><div class="label">Pacientes hospitalizados</div></div>
+ <div class="card kpi"><div class="value" id="mean">0</div><div class="label">Estancia media</div></div>
+ <div class="card kpi"><div class="value" id="maxStay">0</div><div class="label">Estancia máxima</div></div>
+ <div class="card kpi"><div class="value" id="admissionsToday">0</div><div class="label">Ingresos del día</div></div>
+</div>
+
+<div class="charts">
+ <div class="card chart"><canvas id="chartP"></canvas></div>
+ <div class="card chart"><canvas id="chartDx"></canvas></div>
+</div>
+
+<div class="card tableWrap">
+<table><thead><tr><th>Cama</th><th>Primer apellido</th><th>Responsable</th><th>Diagnóstico</th><th>Fecha ingreso</th><th>Estancia</th></tr></thead>
+<tbody id="body"></tbody></table>
+</div>
+</main>
+
+<div id="modal" class="modal"><div class="box">
+ <div class="modalHead"><div><h2>Revisar PDF antes de guardar</h2><div id="status" class="status"></div></div><button class="secondary" onclick="closeModal()">Cerrar</button></div>
+ <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b>Fecha del listado:</b><input id="importDate" type="date" style="width:auto"><span class="small">Se obtiene de “Fecha impresión”.</span></div>
+ <div class="tableWrap preview">
+  <table><thead><tr><th>Cama</th><th>Paciente</th><th>Equipo</th><th>Diagnóstico</th><th>Ingreso</th><th></th></tr></thead><tbody id="preview"></tbody></table>
+ </div>
+ <div class="footerActions"><button class="secondary" onclick="addRow()">+ Añadir fila</button><button class="green" onclick="saveImport()">Guardar día y actualizar</button></div>
+</div></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const SUPABASE_URL='https://ayjfqqddijyvlxhxkdsr.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_1MT90EEK4sLvX9Z5MeL0DA_mCX1wCCI';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let current='',pending=[],chartP=null,chartDx=null,dailySummary=[],currentPatients=[],diagnosisLoadToken=0;
+const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isDate=s=>/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}$/.test(String(s).trim());
+const isBed=s=>/^05\d{2,3}[A-Z]?(?:\s+\(Q\))?$/.test(norm(s));
+const isAge=s=>/^\d{1,3}$/.test(String(s).trim()) && +s>=0 && +s<=120;
+const iso=s=>{const m=String(s).match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:''};
+const es=s=>{if(!s)return'';const a=s.split('-');return a.length===3?`${a[2]}/${a[1]}/${a[0]}`:s};
+function dObj(s){if(!s)return null;const a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])}
+function stay(ing,day){const a=dObj(ing),b=dObj(day);return a&&b?Math.max(0,Math.floor((b-a)/86400000)):0}
+async function sha256(text){const data=new TextEncoder().encode(String(text));const hash=await crypto.subtle.digest('SHA-256',data);return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')}
+function detectPrintDate(tokens,fileName){const m=(String(fileName)+' '+tokens.join(' ')).match(/(\d{1,2}\/\d{1,2}\/\d{4})/);if(m)return iso(m[1]);const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function splitPdfItems(items){const out=[];for(const it of items){for(const part of String(it.str||'').split(/\r?\n/)){const t=part.trim();if(t)out.push(t)}}return out}
+function findPatientStarts(tokens){const starts=[];for(let i=0;i<tokens.length-1;i++){if(!/^\d{3,8}$/.test(tokens[i]))continue;if(!tokens[i+1]||!tokens[i+1].includes(','))continue;let ageFound=false;for(let j=i+2;j<Math.min(tokens.length,i+7);j++){if(isAge(tokens[j])){ageFound=true;break}}if(ageFound)starts.push(i)}return starts}
+function knownProcedurePrefix(text){const prefixes=['SERVICIO DEL PROPIO CENTRO','OTRO CENTRO HOSPITALARIO','ATENCION PRIMARIA'];const n=norm(text);for(const p of prefixes)if(n.startsWith(p+' '))return p;return ''}
+function parseOneRecord(tokens,start,end){
+ const seg=tokens.slice(start,end),nhc=seg[0];let cama='';
+ if(start>0&&isBed(tokens[start-1]))cama=tokens[start-1].replace(/\s+/g,' ').trim();
+ else if(start>1&&/^NIVEL\b/i.test(tokens[start-2])&&/^SEGUNDA$/i.test(tokens[start-1]))cama=(tokens[start-2]+' '+tokens[start-1]).trim();
+ let i=1,name=[];while(i<seg.length&&!isAge(seg[i]))name.push(seg[i++]);if(i>=seg.length)return null;const nombreCompleto=name.join(' ').replace(/\s+/g,' ').trim();i++;
+ let dateIndex=-1;for(let j=i;j<seg.length;j++){if(isDate(seg[j])){dateIndex=j;break}}
+ let ingreso='',remStart=i;if(dateIndex>=0){ingreso=iso(seg[dateIndex]);remStart=dateIndex+1;if(remStart<seg.length&&/^\d{1,3}$/.test(seg[remStart]))remStart++}
+ let rem=seg.slice(remStart),cut=rem.length;for(let j=0;j<rem.length;j++){if(isBed(rem[j])||/^NIVEL\b/i.test(rem[j])||/^Página\b/i.test(rem[j])||rem[j]==='Cama'){cut=j;break}}rem=rem.slice(0,cut);
+ let doctorStart=-1;for(let j=0;j<rem.length;j++){if(rem[j].includes(',')){doctorStart=j;break}}
+ let diagnosisTokens=doctorStart>=0?rem.slice(0,doctorStart):[...rem];
+ if(dateIndex<0){let joined=diagnosisTokens.join(' ').replace(/\s+/g,' ').trim();const prefix=knownProcedurePrefix(joined);if(prefix)joined=joined.slice(prefix.length).trim();diagnosisTokens=joined?joined.split(' '):[]}
+ while(diagnosisTokens.length){const last=diagnosisTokens[diagnosisTokens.length-1];if(/^\d{1,3}$/.test(last)||isDate(last)||/^[NPU]$/.test(last))diagnosisTokens.pop();else break}
+ return {cama,nhc,nombreCompleto,ingreso,diagnostico:diagnosisTokens.join(' ').replace(/\s+/g,' ').trim()};
+}
+function parseTokens(tokens){const starts=findPatientStarts(tokens),rows=[];for(let k=0;k<starts.length;k++){const r=parseOneRecord(tokens,starts[k],k<starts.length-1?starts[k+1]:tokens.length);if(r)rows.push(r)}const seen=new Set();return rows.filter(r=>{if(seen.has(r.nhc))return false;seen.add(r.nhc);return true})}
+async function readPDF(file){const buf=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:buf}).promise;let tokens=[];for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p);const tc=await page.getTextContent();tokens.push(...splitPdfItems(tc.items))}return {rows:parseTokens(tokens),date:detectPrintDate(tokens,file.name)}}
+async function signIn(){const email=document.getElementById('loginEmail').value.trim(),password=document.getElementById('loginPassword').value,msg=document.getElementById('loginMsg');msg.textContent='';const {error}=await sb.auth.signInWithPassword({email,password});if(error){msg.textContent='No se pudo iniciar sesión: '+error.message;return}await showApp()}
+async function signOut(){await sb.auth.signOut();document.getElementById('appScreen').style.display='none';document.getElementById('loginScreen').style.display='flex'}
+document.getElementById('loginBtn').addEventListener('click',signIn);document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')signIn()});document.getElementById('logoutBtn').addEventListener('click',signOut);
+async function showApp(){const {data:{session}}=await sb.auth.getSession();if(!session){document.getElementById('loginScreen').style.display='flex';document.getElementById('appScreen').style.display='none';return}document.getElementById('loginScreen').style.display='none';document.getElementById('appScreen').style.display='block';await loadDailySummary()}
+async function loadDailySummary(){const {data,error}=await sb.from('daily_lists').select('census_date,total_patients,mean_stay,max_stay,new_patients,discharged_patients').order('census_date',{ascending:true});if(error){alert('Error al leer el histórico: '+error.message);return}dailySummary=data||[];const dates=dailySummary.map(x=>x.census_date);if(!current||!dates.includes(current))current=dates.length?dates[dates.length-1]:'';document.getElementById('dateSelect').innerHTML=dates.slice().reverse().map(d=>`<option value="${d}" ${d===current?'selected':''}>${es(d)}</option>`).join('');document.getElementById('daysInfo').textContent=`${dates.length} día(s) guardados en Supabase`;if(current)await loadPatientsForDay(current);else{currentPatients=[];render()}}
+async function loadPatientsForDay(day){
+ const token=++diagnosisLoadToken;
+ currentPatients=[];
+ render();
+
+ const {data,error}=await sb
+   .from('patients_daily')
+   .select('patient_hash,bed,diagnosis,admission_date,stay_days')
+   .eq('census_date',day)
+   .order('bed',{ascending:true});
+
+ if(token!==diagnosisLoadToken || day!==current)return;
+
+ if(error){
+   alert('Error al leer pacientes del '+es(day)+': '+error.message);
+   return;
+ }
+
+ currentPatients=(data||[]).map(r=>({
+   patient_hash:r.patient_hash,
+   cama:r.bed||'',
+   diagnostico:(r.diagnosis||'').trim(),
+   ingreso:r.admission_date||'',
+   estancia:r.stay_days??0
+ }));
+
+ render();
+}
+document.getElementById('dateSelect').addEventListener('change',async e=>{
+ current=e.target.value;
+ currentPatients=[];
+ render();
+ await loadPatientsForDay(current);
+});
+document.getElementById('search').addEventListener('input',render);
+document.getElementById('pdfInput').addEventListener('change',async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;try{const result=await readPDF(file);pending=result.rows;document.getElementById('importDate').value=result.date;const st=document.getElementById('status');st.className='status '+(pending.length?'ok':'warn');st.textContent=pending.length?`${pending.length} pacientes detectados · revisa los diagnósticos antes de guardar`:'No se detectaron pacientes.';renderPreview();document.getElementById('modal').classList.add('show')}catch(err){console.error(err);alert('Error al leer el PDF: '+err.message)}});
+function renderPreview(){document.getElementById('preview').innerHTML=pending.map((r,i)=>`<tr><td><input value="${esc(r.cama)}" oninput="pending[${i}].cama=this.value"></td><td><div style="font-size:11px;color:#687782">${esc(r.nombreCompleto)}</div><span class="small">El nombre no se enviará a Supabase</span></td><td>—</td><td><input class="diag" value="${esc(r.diagnostico)}" oninput="pending[${i}].diagnostico=this.value"></td><td><input type="date" value="${esc(r.ingreso)}" oninput="pending[${i}].ingreso=this.value"></td><td><button class="danger" onclick="pending.splice(${i},1);renderPreview()">×</button></td></tr>`).join('')}
+function addRow(){pending.push({cama:'',nhc:'',nombreCompleto:'',diagnostico:'',ingreso:''});renderPreview()}function closeModal(){document.getElementById('modal').classList.remove('show')}
+
+
+
+async function saveImport(){
+ const day=document.getElementById('importDate').value;
+ if(!day){alert('Indica la fecha del listado.');return}
+ if(!pending.length){alert('No hay pacientes que guardar.');return}
+
+ const {data:{user}}=await sb.auth.getUser();
+ if(!user){alert('La sesión ha caducado. Vuelve a iniciar sesión.');return}
+
+ const rows=[];
+ for(const r of pending){
+   if(!r.nhc)continue;
+   const ph=await sha256('HGUA-cardio-v1|'+r.nhc);
+   rows.push({
+     census_date:day,
+     patient_hash:ph,
+     bed:r.cama||null,
+     diagnosis:r.diagnostico||null,
+     admission_date:r.ingreso||null,
+     stay_days:r.ingreso?stay(r.ingreso,day):null,
+     created_by:user.id
+   });
+ }
+
+ const validStays=rows.map(r=>r.stay_days).filter(x=>Number.isFinite(x));
+ const meanStay=validStays.length?validStays.reduce((a,b)=>a+b,0)/validStays.length:null;
+ const maxStay=validStays.length?Math.max(...validStays):null;
+
+ let q=await sb.from('patients_daily').delete().eq('census_date',day);
+ if(q.error){alert('Error al sustituir pacientes: '+q.error.message);return}
+
+ q=await sb.from('daily_lists').delete().eq('census_date',day);
+ if(q.error){alert('Error al sustituir resumen: '+q.error.message);return}
+
+ if(rows.length){
+   q=await sb.from('patients_daily').insert(rows);
+   if(q.error){alert('Error al guardar pacientes: '+q.error.message);return}
+ }
+
+ q=await sb.from('daily_lists').insert({
+   census_date:day,
+   total_patients:rows.length,
+   mean_stay:meanStay,
+   max_stay:maxStay,
+   new_patients:0,
+   discharged_patients:0,
+   created_by:user.id
+ });
+ if(q.error){alert('Error al guardar el resumen: '+q.error.message);return}
+
+ current=day;
+ closeModal();
+ await loadDailySummary();
+}
+async function deleteDay(){
+ if(!current)return;
+ if(!confirm(`¿Eliminar el listado del ${es(current)} de la base compartida?`))return;
+
+ let q=await sb.from('patients_daily').delete().eq('census_date',current);
+ if(q.error){alert(q.error.message);return}
+
+ q=await sb.from('daily_lists').delete().eq('census_date',current);
+ if(q.error){alert(q.error.message);return}
+
+ current='';
+ await loadDailySummary();
+}
+function render(){const summary=dailySummary.find(x=>x.census_date===current)||null,q=norm(document.getElementById('search').value),shown=q?currentPatients.filter(r=>norm(Object.values(r).join(' ')).includes(q)):currentPatients;document.getElementById('total').textContent=summary?.total_patients??0;document.getElementById('mean').textContent=summary?.mean_stay!=null?Number(summary.mean_stay).toFixed(1):'0';document.getElementById('maxStay').textContent=summary?.max_stay??0;document.getElementById('admissionsToday').textContent=currentPatients.filter(r=>r.ingreso===current).length;document.getElementById('body').innerHTML=shown.length?shown.map(r=>`<tr><td><b>${esc(r.cama||'—')}</b></td><td>Paciente seudonimizado</td><td>—</td><td>${esc(r.diagnostico)}</td><td>${esc(es(r.ingreso))}</td><td>${r.estancia}</td></tr>`).join(''):'<tr><td colspan="6">Sin datos.</td></tr>';renderCharts()}
+
+
+function groupDiagnosis(raw){
+  const d=norm(raw);
+
+  if(!d) return 'Sin diagnóstico';
+
+  if(
+    d.includes('INSUFICIENCIA CARDIACA') ||
+    d.includes('FALLO CARDIACO') ||
+    d.includes('HEART FAILURE') ||
+    /\bICC\b/.test(d) ||
+    /\bIC\b/.test(d)
+  ){
+    return 'Insuficiencia cardiaca';
+  }
+
+  if(
+    d.includes('SCACEST') ||
+    d.includes('SACACEST') ||
+    d.includes('SCACACEST') ||
+    d.includes('IAMCEST') ||
+    d.includes('IAM CEST') ||
+    d.includes('IAM CON ELEVACION') ||
+    d.includes('INFARTO CON ELEVACION') ||
+    d.includes('STEMI')
+  ){
+    return 'SCACEST / IAM con elevación ST';
+  }
+
+  if(
+    d.includes('SCASEST') ||
+    d.includes('IAMSEST') ||
+    d.includes('IAM SEST') ||
+    d.includes('IAM SIN ELEVACION') ||
+    d.includes('INFARTO SIN ELEVACION') ||
+    d.includes('NSTEMI')
+  ){
+    return 'SCASEST / IAM sin elevación ST';
+  }
+
+  if(
+    d.includes('DOLOR TORACICO')
+  ){
+    return 'Dolor torácico';
+  }
+
+  if(
+    d === 'SCA' ||
+    d.includes('SINDROME CORONARIO') ||
+    d.includes('ANGOR') ||
+    d.includes('ANGINA')
+  ){
+    return 'SCA / Angina';
+  }
+
+  if(
+    /\bEAO\b/.test(d) ||
+    d.includes('ESTENOSIS AORTICA') ||
+    d.includes('INSUFICIENCIA AORTICA') ||
+    d.includes('ESTENOSIS MITRAL') ||
+    d.includes('INSUFICIENCIA MITRAL') ||
+    d.includes('VALVUL')
+  ){
+    return 'Valvulopatía';
+  }
+
+  if(
+    d.includes('TAQUICARDIA') ||
+    d.includes('BRADICARDIA') ||
+    d.includes('BRADI-TAQUICARDIA') ||
+    d.includes('BRADITAQUICARDIA') ||
+    d.includes('ARRITMIA') ||
+    d.includes('FIBRILACION AURICULAR') ||
+    /\bFA\b/.test(d) ||
+    d.includes('FLUTTER') ||
+    d.includes('BLOQUEO AV') ||
+    d.includes('BAV') ||
+    d.includes('MARCAPASOS')
+  ){
+    return 'Arritmias / conducción';
+  }
+
+  return 'Otros';
+}
+
+async function refreshDiagnosisChart(day){
+ if(chartDx){chartDx.destroy();chartDx=null}
+
+ if(!day)return;
+
+ const requestedDay=day;
+ const {data,error}=await sb
+   .from('patients_daily')
+   .select('diagnosis')
+   .eq('census_date',requestedDay);
+
+ if(requestedDay!==current)return;
+
+ if(error){
+   console.error('Error cargando diagnósticos',error);
+   return;
+ }
+
+ const counts={};
+ (data||[]).forEach(r=>{
+   const group=groupDiagnosis(r.diagnosis||'');
+   counts[group]=(counts[group]||0)+1;
+ });
+
+ const groupOrder=[
+   'Insuficiencia cardiaca',
+   'SCACEST / IAM con elevación ST',
+   'SCASEST / IAM sin elevación ST',
+   'SCA / Angina',
+   'Dolor torácico',
+   'Valvulopatía',
+   'Arritmias / conducción',
+   'Otros',
+   'Sin diagnóstico'
+ ];
+
+ const series=Object.entries(counts)
+   .sort((a,b)=>{
+     const ia=groupOrder.indexOf(a[0]);
+     const ib=groupOrder.indexOf(b[0]);
+     if(ia!==ib)return ia-ib;
+     return b[1]-a[1];
+   });
+
+ chartDx=new Chart(document.getElementById('chartDx'),{
+   type:'bar',
+   data:{
+     labels:series.map(x=>x[0]),
+     datasets:[{label:'Pacientes',data:series.map(x=>x[1])}]
+   },
+   options:{
+     indexAxis:'y',
+     responsive:true,
+     maintainAspectRatio:false,
+     plugins:{
+       legend:{display:false},
+       title:{display:true,text:'Diagnósticos · '+es(requestedDay)}
+     },
+     scales:{
+       x:{beginAtZero:true,ticks:{precision:0},title:{display:true,text:'Nº pacientes'}}
+     }
+   }
+ });
+}
+
+function renderCharts(){
+ if(chartP){chartP.destroy();chartP=null}
+
+ chartP=new Chart(document.getElementById('chartP'),{
+   type:'bar',
+   data:{
+     labels:dailySummary.map(x=>es(x.census_date)),
+     datasets:[{
+       label:'Pacientes hospitalizados',
+       data:dailySummary.map(x=>Number(x.total_patients)||0)
+     }]
+   },
+   options:{
+     responsive:true,
+     maintainAspectRatio:false,
+     plugins:{
+       legend:{display:false},
+       title:{display:true,text:'Pacientes hospitalizados por día'}
+     },
+     scales:{
+       y:{beginAtZero:true,ticks:{precision:0},title:{display:true,text:'Nº pacientes'}},
+       x:{title:{display:true,text:'Fecha'}}
+     }
+   }
+ });
+
+ refreshDiagnosisChart(current);
+}
+function exportBackup(){alert('Los datos ya están centralizados en Supabase.')}document.getElementById('backupInput').addEventListener('change',()=>alert('La importación local está desactivada en la versión centralizada.'));
+showApp();
+</script>
+</div>
+</body>
+</html>
